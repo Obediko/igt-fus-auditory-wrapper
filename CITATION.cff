@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+title: "IGT FUS Auditory Masking Wrapper"
+message: "If you use this software, please cite the software and the methodological sources listed in the README."
+type: software
+authors:
+  - family-names: Apochi
+    given-names: Obed
+  - family-names: Axmacher
+    given-names: Nikolai
+version: 0.1.0
+date-released: 2026-09-03
+license: MIT
+repository-code: "https://github.com/Obediko/igt-fus-auditory-wrapper"
