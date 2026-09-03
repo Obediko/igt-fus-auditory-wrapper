@@ -1,0 +1,23 @@
+{
+  "protocol_label": "pmErC auditory mask example",
+  "stimulation_duration_s": 90.0,
+  "prf_hz": 5.0,
+  "matched_pulse_width_ms": 20.0,
+  "pre_mask_s": 1.0,
+  "post_mask_s": 1.0,
+  "sample_rate_hz": 48000,
+  "carrier_hz": 14000.0,
+  "profile": "simple_prf",
+  "matching_gain": 0.35,
+  "background_gain": 0.30,
+  "master_gain": 0.80,
+  "audio_ramp_ms": 5.0,
+  "stereo_pan": 0.0,
+  "random_seed": 20260903,
+  "narrowband_center_hz": 1000.0,
+  "narrowband_bandwidth_hz": 400.0,
+  "mondrian_density_per_s": 6.0,
+  "mondrian_tone_ms": 300.0,
+  "output_device": null,
+  "headphones_calibrated": false
+}
