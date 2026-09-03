@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Site-local integration and study-local settings
+local_fus_hook.py
+config/*.local.json
+masks/
+logs/
+
+# Never commit device/calibration artifacts
+*.pyd
+*.dll
+*.ini
+*conversion*
+*calibration*
+*equalization*
+*powerCurveFit*
+*focusCurveFit*
+*voltageCurveFit*
