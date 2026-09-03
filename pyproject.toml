@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "igt-fus-auditory-wrapper"
+version = "0.1.0"
+description = "Hardware-agnostic auditory masking wrapper for an existing FUS Driving System installation"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+  {name = "Obed Apochi"},
+  {name = "Nikolai Axmacher"}
+]
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "sounddevice>=0.4.6"
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+igt-auditory = "igt_fus_auditory.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
