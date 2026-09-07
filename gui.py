@@ -5,14 +5,15 @@ from dataclasses import replace
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from igt_fus_auditory.audio import AudioPlayer
 from igt_fus_auditory.config import MaskConfig
 from igt_fus_auditory.maskfile import save_mask
-from igt_fus_auditory.session import run_active, run_sham
 from igt_fus_auditory.signals import generate_mask
 
 
@@ -303,6 +304,34 @@ class App:
             except BaseException as exc: self.root.after(0, lambda: self.finish(None, exc))
         threading.Thread(target=work, daemon=True).start()
 
+    def process_background(self, label, command, env=None):
+        if self.busy: return
+        self.busy = True; self.status_var.set(label)
+        for b in self.buttons: b.configure(state="disabled")
+        def work():
+            failure = None
+            try:
+                process = subprocess.Popen(
+                    command,
+                    cwd=str(ROOT),
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+                for line in process.stdout:
+                    line = line.rstrip()
+                    if line: self.root.after(0, lambda value=line: self.message(value))
+                return_code = process.wait()
+                if return_code:
+                    failure = RuntimeError(f"Underlying process exited with status {return_code}")
+            except BaseException as exc:
+                failure = exc
+            result = "Underlying session process completed." if failure is None else None
+            self.root.after(0, lambda: self.finish(result, failure))
+        threading.Thread(target=work, daemon=True).start()
+
     def finish(self, result, exc):
         self.busy=False; self.status_var.set("Ready" if not exc else "Failed")
         for b in self.buttons: b.configure(state="normal")
@@ -315,11 +344,21 @@ class App:
         try:
             if not cfg.headphones_calibrated: raise RuntimeError("Confirm measured and approved speaker output first")
             self.check_match(cfg); g=generate_mask(cfg); MASK.parent.mkdir(parents=True, exist_ok=True); save_mask(g, MASK); LOGS.mkdir(parents=True, exist_ok=True); self.stop_preview(True)
-            if self.condition.get()=="sham": self.background("Sham running", lambda: (run_sham(g, LOGS/"sham_session.jsonl"), "Sham complete")[1]); return
+            if self.condition.get()=="sham":
+                command = [sys.executable, "-u", "-m", "igt_fus_auditory", "sham", "--mask", str(MASK), "--log", str(LOGS/"sham_session.jsonl")]
+                self.message("Starting sham. The Dortmund FUS backend will not be called.")
+                self.process_background("Sham process running", command)
+                return
             if not HOOK.exists(): raise FileNotFoundError(f"Local hook not found: {HOOK}")
-            answer=simpledialog.askstring("Confirm active delivery", "Confirm coupling, targeting, exposure, monitoring and hardware emergency stop.\n\nType EXECUTE ACTIVE to continue.")
-            if answer!="EXECUTE ACTIVE": self.message("Active cancelled before preparation."); return
-            os.environ["IGT_FUS_ADAPTER_PATH"]=str(self.adapter_path()); self.background("Active running; use hardware emergency stop if required", lambda: (run_active(g, HOOK, allow_active=True, log_path=LOGS/"active_session.jsonl"), "Active complete")[1])
+            if not messagebox.askyesno(
+                "Confirm active delivery",
+                "ACTIVE will prepare the Dortmund IGT system and execute the configured ultrasound sequence after the pre-mask interval.\n\nConfirm coupling, targeting, approved exposure, monitoring and hardware emergency-stop readiness.\n\nProceed?",
+            ):
+                self.message("Active cancelled before preparation."); return
+            env = os.environ.copy(); env["IGT_FUS_ADAPTER_PATH"] = str(self.adapter_path())
+            command = [sys.executable, "-u", "-m", "igt_fus_auditory", "active", "--mask", str(MASK), "--hook", str(HOOK), "--log", str(LOGS/"active_session.jsonl"), "--confirm-active"]
+            self.message("Active confirmed. Starting the Dortmund-backed process; its own output appears below.")
+            self.process_background("Dortmund active process running; use hardware emergency stop if required", command, env)
         except Exception as exc: self.error(exc)
 
     def close(self):
