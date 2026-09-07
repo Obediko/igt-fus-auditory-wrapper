@@ -43,7 +43,7 @@ class App:
         self.devices = {}
         self.player = None
         self.busy = False
-        self.calibrated = tk.BooleanVar(False)
+        self.calibrated = tk.BooleanVar(master=root, value=False)
         self.condition = tk.StringVar(value="sham")
         self.adapter = tk.StringVar(value=str(DEFAULT_ADAPTER))
         self.ultrasound_khz = tk.StringVar(value="300")
