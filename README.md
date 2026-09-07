@@ -87,6 +87,34 @@ After the headphone output is measured/approved, freeze the final WAV:
 
 The WAV is stored with a JSON sidecar containing the configuration and a SHA-256 hash.
 
+## Operator GUI
+
+The Windows operator interface stays in the isolated wrapper folder and does not copy or edit the laboratory FUS installation.
+
+After setup, launch it by double-clicking:
+
+```text
+start_auditory_wrapper.bat
+```
+
+The interface provides speaker selection, a three-second audio test, deterministic mask generation and verification, sham operation, guarded active operation, live status, and session logs. It also provides a Browse field for selecting the laptop-local IGT adapter. That selected path is stored only in `config/gui.local.json`, which is excluded from Git.
+
+For the GUI-selectable Dortmund bridge, copy:
+
+```text
+examples\dortmund_gui_hook.example.py
+```
+
+to:
+
+```text
+local_fus_hook.py
+```
+
+The GUI passes the selected adapter path to that hook at runtime. Device identities, pressure, focus, timing, calibration and conversion data remain in the selected local adapter and are not stored in this repository.
+
+The GUI does not present a software button as a reliable FUS emergency stop. Once active delivery has been dispatched, use the laboratory hardware emergency-stop procedure if interruption is required.
+
 ## Connecting to the FUS Driving System
 
 Copy:
