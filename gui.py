@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from igt_fus_auditory.audio import AudioPlayer
-from igt_fus_auditory.config import MaskConfig, SUPPORTED_PROFILES
+from igt_fus_auditory.config import MaskConfig
 from igt_fus_auditory.maskfile import save_mask
 from igt_fus_auditory.session import run_active, run_sham
 from igt_fus_auditory.signals import generate_mask
@@ -24,13 +24,21 @@ MASK = ROOT / "masks" / "study_mask.wav"
 HOOK = ROOT / "local_fus_hook.py"
 LOGS = ROOT / "logs"
 DEFAULT_ADAPTER = Path(r"C:\Users\TUS\FUS-driving-software\standalone_driving_system_software\standalone_igt-Obed.py")
+PLAYBACK_MODES = ("Matching Only", "Background Only", "Combined")
+BACKGROUND_PROFILES = {
+    "White Noise": "matched_plus_white",
+    "Pink Noise": "matched_plus_pink",
+    "Narrowband Noise": "matched_plus_narrowband",
+    "Auditory Mondrian": "auditory_mondrian",
+}
+PROFILE_BACKGROUNDS = {value: key for key, value in BACKGROUND_PROFILES.items()}
+PROFILE_BACKGROUNDS["simple_prf"] = "White Noise"
 
 
 class App:
     FLOAT_FIELDS = (
         "stimulation_duration_s", "prf_hz", "matched_pulse_width_ms", "pre_mask_s", "post_mask_s",
         "carrier_hz", "matching_gain", "background_gain", "master_gain", "audio_ramp_ms", "stereo_pan",
-        "narrowband_center_hz", "narrowband_bandwidth_hz", "mondrian_density_per_s", "mondrian_tone_ms",
     )
 
     def __init__(self, root):
@@ -45,6 +53,8 @@ class App:
         self.busy = False
         self.calibrated = tk.BooleanVar(master=root, value=False)
         self.condition = tk.StringVar(value="sham")
+        self.playback_mode = tk.StringVar(value="Combined")
+        self.background_type = tk.StringVar(value="White Noise")
         self.adapter = tk.StringVar(value=str(DEFAULT_ADAPTER))
         self.ultrasound_khz = tk.StringVar(value="300")
         self.status_var = tk.StringVar(value="Ready")
@@ -91,19 +101,26 @@ class App:
         sound = ttk.LabelFrame(box, text="Auditory matching and background", padding=5)
         sound.pack(fill="x", pady=4)
         for i in range(4): sound.columnconfigure(i, weight=1)
-        self.combo(sound, 0, 0, "Masking profile", "profile", SUPPORTED_PROFILES)
-        self.field(sound, 0, 1, "Audible carrier (Hz)", "carrier_hz")
-        self.field(sound, 1, 0, "Sample rate (Hz)", "sample_rate_hz")
-        self.field(sound, 1, 1, "Audio ramp (ms)", "audio_ramp_ms")
+        self.field(sound, 0, 0, "Audible carrier (Hz)", "carrier_hz")
+        self.field(sound, 0, 1, "Sample rate (Hz)", "sample_rate_hz")
+        ttk.Label(sound, text="Playback mode").grid(row=1, column=0, sticky="w", padx=(8, 4), pady=4)
+        ttk.Combobox(sound, textvariable=self.playback_mode, values=PLAYBACK_MODES, state="readonly", width=21).grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=4)
+        ttk.Label(sound, text="Background").grid(row=1, column=2, sticky="w", padx=(8, 4), pady=4)
+        ttk.Combobox(sound, textvariable=self.background_type, values=tuple(BACKGROUND_PROFILES), state="readonly", width=21).grid(row=1, column=3, sticky="ew", padx=(0, 10), pady=4)
         self.field(sound, 2, 0, "Matching gain (0–1)", "matching_gain")
         self.field(sound, 2, 1, "Background gain (0–1)", "background_gain")
         self.field(sound, 3, 0, "Master gain (0–1)", "master_gain")
         self.field(sound, 3, 1, "Stereo pan (-1 to 1)", "stereo_pan")
-        self.field(sound, 4, 0, "Frozen random seed", "random_seed")
-        self.field(sound, 4, 1, "Narrowband centre (Hz)", "narrowband_center_hz")
-        self.field(sound, 5, 0, "Narrowband width (Hz)", "narrowband_bandwidth_hz")
-        self.field(sound, 5, 1, "Mondrian tones/s", "mondrian_density_per_s")
-        self.field(sound, 6, 0, "Mondrian tone (ms)", "mondrian_tone_ms")
+        self.field(sound, 4, 0, "Pulse ramp (ms)", "audio_ramp_ms")
+        self.field(sound, 4, 1, "Frozen random seed", "random_seed")
+        ttk.Label(
+            sound,
+            text=("Study preset: Combined playback with White Noise. Matching and background gains set the mix; "
+                  "Master gain controls digital output and must follow the approved speaker measurement."),
+            foreground="#365a7c",
+            wraplength=760,
+        ).grid(row=5, column=0, columnspan=3, sticky="w", padx=8, pady=(5, 7))
+        ttk.Button(sound, text="Load study audio defaults", command=self.load_audio_defaults).grid(row=5, column=3, sticky="e", padx=(0, 10), pady=(5, 7))
 
         setup = ttk.LabelFrame(box, text="Speaker setup, local delivery path and allocation", padding=6)
         setup.pack(fill="x", pady=4)
@@ -136,14 +153,18 @@ class App:
         self.message("Default condition is sham. Sham never calls the local FUS hook.")
 
     def _load(self):
+        gui_data = {}
         if GUI_SETTINGS.exists():
-            try:
-                p = json.loads(GUI_SETTINGS.read_text(encoding="utf-8")).get("igt_adapter_path")
-                if p: self.adapter.set(p)
+            try: gui_data = json.loads(GUI_SETTINGS.read_text(encoding="utf-8"))
             except Exception as exc: self.message(f"GUI settings warning: {exc}")
+        if gui_data.get("igt_adapter_path"): self.adapter.set(gui_data["igt_adapter_path"])
         cfg = MaskConfig.from_json(CONFIG if CONFIG.exists() else EXAMPLE)
         data = cfg.to_dict()
         for name, var in self.vars.items(): var.set(str(data[name]))
+        self.playback_mode.set(gui_data.get("playback_mode", "Combined"))
+        self.background_type.set(gui_data.get("background_type", PROFILE_BACKGROUNDS.get(cfg.profile, "White Noise")))
+        if "matching_gain_setting" in gui_data: self.vars["matching_gain"].set(str(gui_data["matching_gain_setting"]))
+        if "background_gain_setting" in gui_data: self.vars["background_gain"].set(str(gui_data["background_gain_setting"]))
         self.calibrated.set(cfg.headphones_calibrated)
         self.saved_device = cfg.output_device
 
@@ -152,10 +173,27 @@ class App:
         for name in self.FLOAT_FIELDS: data[name] = float(self.vars[name].get().strip())
         data["sample_rate_hz"] = int(self.vars["sample_rate_hz"].get().strip())
         data["random_seed"] = int(self.vars["random_seed"].get().strip())
-        data["profile"] = self.vars["profile"].get()
+        data["profile"] = BACKGROUND_PROFILES[self.background_type.get()]
+        if self.playback_mode.get() == "Matching Only": data["background_gain"] = 0.0
+        elif self.playback_mode.get() == "Background Only": data["matching_gain"] = 0.0
         data["output_device"] = self.selected_device()
         data["headphones_calibrated"] = bool(self.calibrated.get())
         return MaskConfig(**data).validate()
+
+    def load_audio_defaults(self):
+        self.playback_mode.set("Combined")
+        self.background_type.set("White Noise")
+        defaults = {
+            "carrier_hz": "14000.0",
+            "sample_rate_hz": "48000",
+            "matching_gain": "0.35",
+            "background_gain": "0.30",
+            "audio_ramp_ms": "5.0",
+            "stereo_pan": "0.0",
+            "random_seed": "20260903",
+        }
+        for name, value in defaults.items(): self.vars[name].set(value)
+        self.message("Loaded the agreed study audio defaults. Master gain was left unchanged because it is calibration-dependent.")
 
     def selected_device(self):
         if self.device.get() not in self.devices: raise ValueError("Select a valid stereo speaker/output")
@@ -235,7 +273,14 @@ class App:
         if not quiet: self.message("Audio preview stopped.")
 
     def save_gui(self):
-        GUI_SETTINGS.parent.mkdir(parents=True, exist_ok=True); GUI_SETTINGS.write_text(json.dumps({"igt_adapter_path": self.adapter.get().strip()}, indent=2)+"\n", encoding="utf-8")
+        settings = {
+            "igt_adapter_path": self.adapter.get().strip(),
+            "playback_mode": self.playback_mode.get(),
+            "background_type": self.background_type.get(),
+            "matching_gain_setting": float(self.vars["matching_gain"].get()),
+            "background_gain_setting": float(self.vars["background_gain"].get()),
+        }
+        GUI_SETTINGS.parent.mkdir(parents=True, exist_ok=True); GUI_SETTINGS.write_text(json.dumps(settings, indent=2)+"\n", encoding="utf-8")
 
     def save_settings(self):
         try:
